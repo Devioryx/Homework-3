@@ -5,6 +5,7 @@
 #include <stack>
 #include <climits>
 #include <vector>
+#include <cassert>
 
 class IntegerSet {
 private:
@@ -16,40 +17,66 @@ public:
   IntegerSet& operator=(const IntegerSet&);
   ~IntegerSet();
 
-  class IntegerSetIterator {
-  private:
-    std::stack<Node*> stack;
-    Node* current;
+class NodeIterator {
 
-    void pushLeft(Node* node) {
-        while (node != nullptr) {
-            stack.push(node);
-            node = node->left;
-        }
-    } 
+private:
+    std::stack<Node*> backtrack;
+
+private:
+    void pushAllTheWayToTheLeft(Node* startFrom)
+    {
+        for(; startFrom; startFrom = startFrom->left)
+            backtrack.push(startFrom);
+    }
 
 public:
-    IntegerSetIterator(Node* root) : current(root) {
-        pushLeft(current);
+    static NodeIterator endIterator()
+    {
+        return NodeIterator(nullptr);
     }
 
-    bool hasNext() {
-        return !stack.empty();
+public:
+    NodeIterator(Node* startFrom)
+    {
+        pushAllTheWayToTheLeft(startFrom);
+    }
+    
+    bool atEnd() const
+    {
+        return backtrack.empty();
     }
 
-    int next() {
-        current = stack.top();
-        stack.pop();
-        int value = current->value;
-        pushLeft(current->right);
-        return value;
-    };
+    Node& operator*()
+    {
+        assert( ! atEnd() );
+        return *backtrack.top();
+    }
 
-    int peek() {
-      if (hasNext()) {
-          return stack.top()->value;
-      }
-      throw std::runtime_error("No more elements");
+    Node* operator->()
+    {
+        assert( ! atEnd() );
+        return backtrack.top();
+    }
+    
+    void operator++()
+    {
+        assert( ! atEnd() );
+        Node* p = backtrack.top();
+        backtrack.pop();
+        pushAllTheWayToTheLeft(p->right);
+    }
+
+    bool operator==(const NodeIterator& other) const
+    {
+        if(atEnd() || other.atEnd())
+            return atEnd() == other.atEnd();
+
+        return backtrack.top() == other.backtrack.top();
+    }
+
+    bool operator!=(const NodeIterator& other) const
+    {
+        return ! operator==(other);
     }
 };
 public:

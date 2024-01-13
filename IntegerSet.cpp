@@ -3,16 +3,18 @@
 IntegerSet::IntegerSet()
 : root(nullptr) {}
 
+
+
 IntegerSet::IntegerSet(const IntegerSet& other)
 : root(nullptr) {
-  root = copyTree(other.root);
+  root = copy(other.root);
 }
 
 IntegerSet& IntegerSet::operator=(const IntegerSet& other) {
   if(this != &other)
   {
     clearTree();
-    root = copyTree(other.root);
+    root = copy(other.root);
   }
   return *this;
 }
@@ -26,20 +28,26 @@ size_t IntegerSet::size() const {
 }
 
 bool IntegerSet::equals(const IntegerSet& other) const {
-  int thisSize = size();
-  int otherSize = other.size();
+    int thisSize = size(); // Assuming 'size()' method calculates the number of elements
+    int otherSize = other.size();
 
-  if (thisSize != otherSize)
-      return false;
+    if (thisSize != otherSize) {
+        return false; // Sets of different sizes are not equal
+    }
 
-  IntegerSetIterator it1(this->root);
-  IntegerSetIterator it2(other.root);
+    NodeIterator it1(this->root);
+    NodeIterator it2(other.root);
+    NodeIterator end = NodeIterator::endIterator();
 
-  while (it1.hasNext() && it2.hasNext()) 
-      if (it1.next() != it2.next()) 
-          return false;
+    while (!it1.atEnd() && !it2.atEnd()) {
+        if (it1->value != it2->value) {
+            return false; // Mismatch found
+        }
+        ++it1;
+        ++it2;
+    }
 
-  return true;
+    return true; // All elements matched
 }
 
 bool IntegerSet::contains(int elem) const {
@@ -47,50 +55,72 @@ bool IntegerSet::contains(int elem) const {
 }
 
 bool IntegerSet::subsetOf(const IntegerSet& other) const {
-  IntegerSetIterator it1(this->root);
-  IntegerSetIterator it2(other.root);
+    NodeIterator it1(this->root);
+    NodeIterator it2(other.root);
+    NodeIterator end = NodeIterator::endIterator();
 
-  if (!it1.hasNext()) {
-      return true; 
-  }
+    if (it1.atEnd()) {
+        return true; // Empty set is a subset of any set
+    }
 
-  if (!it2.hasNext()) {
-      return false; 
-  }
+    if (it2.atEnd()) {
+        return false; // Non-empty set cannot be a subset of an empty set
+    }
 
-  int value1 = it1.next();
-  int value2 = it2.next();
+    int value1 = it1->value;
+    int value2 = it2->value;
 
-  while (true) {
-      if (value1 < value2) {
-          return false; 
-      } else if (value1 == value2) {
-          if (!it1.hasNext()) {
-              return true; 
-          }
-          value1 = it1.next();
-      }
+    while (true) {
+        if (value1 < value2) {
+            return false; // Element in 'this' not found in 'other'
+        } else if (value1 == value2) {
+            ++it1; // Move to next element in 'this'
+            if (it1.atEnd()) {
+                return true; // All elements of 'this' found in 'other'
+            }
+            value1 = it1->value;
+        }
 
-      if (!it2.hasNext()) {
-          return false; 
-      }
-      value2 = it2.next();
-  }
+        ++it2; // Move to next element in 'other'
+        if (it2.atEnd()) {
+            return false; // Reached end of 'other' without finding all elements of 'this'
+        }
+        value2 = it2->value;
+    }
 }
 
 IntegerSet IntegerSet::getUnion(const IntegerSet& other) const {
     IntegerSet unionSet;
-    IntegerSetIterator it1(this->root);
-    IntegerSetIterator it2(other.root);
+    Node* rightmostNode = nullptr;
+    NodeIterator it1(this->root);
+    NodeIterator it2(other.root);
+    NodeIterator end = NodeIterator::endIterator();
 
-    while (it1.hasNext() || it2.hasNext()) {
-        if (!it2.hasNext() || (it1.hasNext() && it1.peek() < it2.peek())) {
-            unionSet.insert(it1.next());
-        } else if (!it1.hasNext() || (it2.hasNext() && it2.peek() < it1.peek())) {
-            unionSet.insert(it2.next());
+    while (!it1.atEnd() || !it2.atEnd()) {
+        Node* newNode = nullptr;
+        try {
+            if (it2.atEnd() || (!it1.atEnd() && it1->value < it2->value)) {
+                newNode = new Node((*it1).value);
+                ++it1;
+            } else if (it1.atEnd() || (!it2.atEnd() && it2->value < it1->value)) {
+                newNode = new Node((*it2).value);
+                ++it2;
+            } else {
+                newNode = new Node((*it1).value);
+                ++it1; ++it2;
+            }
+        }
+        catch(std::bad_alloc& e) {
+            unionSet.clearTree();
+            throw;
+        }
+
+        if (unionSet.root == nullptr) {
+            unionSet.root = newNode;
+            rightmostNode = newNode;
         } else {
-            unionSet.insert(it1.next());
-            it2.next();
+            rightmostNode->right = newNode;
+            rightmostNode = newNode;
         }
     }
 
@@ -99,21 +129,38 @@ IntegerSet IntegerSet::getUnion(const IntegerSet& other) const {
 
 IntegerSet IntegerSet::getIntersection(const IntegerSet& other) const {
     IntegerSet intersectionSet;
-    IntegerSetIterator it1(this->root);
-    IntegerSetIterator it2(other.root);
+    Node* rightmostNode = nullptr;
+    NodeIterator it1(this->root);
+    NodeIterator it2(other.root);
+    NodeIterator end = NodeIterator::endIterator();
 
-    while (it1.hasNext() && it2.hasNext()) {
-        int value1 = it1.peek(); 
-        int value2 = it2.peek(); 
+    while (!it1.atEnd() && !it2.atEnd()) {
+        Node* newNode = nullptr;
 
-        if (value1 == value2) {
-            intersectionSet.insert(value1); 
-            it1.next(); 
-            it2.next(); 
-        } else if (value1 < value2) {
-            it1.next(); 
-        } else {
-            it2.next(); 
+        int value1 = it1->value; 
+        int value2 = it2->value;
+
+        try {
+            if (value1 == value2) {
+                newNode = new Node(value1);
+                if (intersectionSet.root == nullptr) {
+                    intersectionSet.root = newNode;
+                    rightmostNode = newNode;
+                } else {
+                    rightmostNode->right = newNode;
+                    rightmostNode = newNode;
+                }
+                ++it1; 
+                ++it2; 
+            } else if (value1 < value2) {
+                ++it1;
+            } else {
+                ++it2;
+            }
+        }
+        catch(std::exception& e) {
+            intersectionSet.clearTree();
+            throw;
         }
     }
 
@@ -140,8 +187,8 @@ void IntegerSet::deserialize(std::istream& in) {
     try {
         root = buildTree(values, 0, itemsSize - 1);
     }
-    catch(const std::bad_alloc& e) {
-        std::cerr << "Memory allocation failed: " << e.what() << '\n';
+    catch(std::bad_alloc& e) {
+        clearTree();
         throw;
     }
 }
@@ -150,11 +197,18 @@ Node* IntegerSet::buildTree(const std::vector<int>& values, int start, int end) 
     if (start > end)
         return nullptr;
 
-    int mid = start + (end - start) / 2;
-    Node* node = new Node(values[mid]);
+    Node* node = nullptr;
+    try {
+        int mid = start + (end - start) / 2;
+        node = new Node(values[mid]);
 
-    node->left = buildTree(values, start, mid - 1);
-    node->right = buildTree(values, mid + 1, end);
+        node->left = buildTree(values, start, mid - 1);
+        node->right = buildTree(values, mid + 1, end);
+    }
+    catch (std::bad_alloc& e) {
+        release(node);
+        throw;
+    }
 
     return node;
 }
@@ -177,11 +231,9 @@ void IntegerSet::serializeHelper(Node* node, std::ostream& out, bool& isFirst) c
 
 void IntegerSet::insert(int value) {
     try {
-        root = insertNode(root, value);
+        insertNode(root, value);
     }
-    catch(const std::bad_alloc& e) {
-        std::cerr << "Memory allocation failed: " << e.what() << '\n';
-        release(root); 
+    catch(std::bad_alloc& ) {
         throw; 
     }
 }
